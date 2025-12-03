@@ -3,48 +3,44 @@ import time
 
 PORT = 'COM5'
 BAUDRATE = 9600
+MONITOR = serial.Serial(PORT, BAUDRATE, timeout=2)
 
-ser = serial.Serial(PORT, BAUDRATE, timeout=2)
+def voltGroupReader(groupNum, MONITOR, volCount):
+    MONITOR.dtr = True
+    time.sleep(0.1)
+    MONITOR.dtr = False
+    time.sleep(3)
+    MONITOR.reset_input_buffer()
 
-ser.dtr = True
-time.sleep(0.1)
-ser.dtr = False
-time.sleep(3)
-ser.reset_input_buffer()
+    while MONITOR.in_waiting == 0:
+        time.sleep(0.001)
+    first_line = MONITOR.readline()
 
-while ser.in_waiting == 0:
-    time.sleep(0.001)
-first_line = ser.readline()
-voltage_groups = [[], [], []]
-group_times = [0, 0, 0]
+    voltage_groups = []
+    group_times = []
 
-for group_num in range(3):
-    group_samples = []
-    group_start_time = time.perf_counter()
+    for i in range(groupNum):
+        startTime = time.perf_counter()
+        voltageList = []
+        collected = 0
 
-    collected = 0
-    while collected < 100:
-        if ser.in_waiting > 0:
-            line = ser.readline().decode('ascii', errors='ignore').strip()
-
-            if line and "ADC:" in line and "V:" in line:
-                v_start = line.find('V:') + 2
-                voltage_str = line[v_start:].split()[0]
-                voltage = float(voltage_str)
-                group_samples.append(voltage)
+        while collected < volCount:
+                line = MONITOR.readline().decode('ascii', errors='ignore').strip()
+                volStr = line[(line.find('V:') + 2):].split()[0]
+                volFlt = float(volStr)
+                voltageList.append(volFlt)
                 collected += 1
-        else:
-            time.sleep(0.0001)
 
-    group_end_time = time.perf_counter()
-    group_times[group_num] = group_end_time - group_start_time
-    voltage_groups[group_num] = group_samples
+        endTime = time.perf_counter()
+        deltaTime = endTime - startTime
+        freq = volCount / deltaTime
 
-    freq = 100 / group_times[group_num]
-    print(f"Группа {group_num + 1}: частота = {freq:.3f} Гц, значений = {len(group_samples)}")
+        voltage_groups.append(voltageList)
+        group_times.append(freq)
 
-ser.close()
+    MONITOR.close()
+    return voltage_groups, group_times
 
-# print(voltage_groups[0])
-# print(voltage_groups[1])
-# print(voltage_groups[2])
+voltage_groups, frequencies = voltGroupReader(10, MONITOR,10)
+
+print("Частоты групп:", frequencies)
