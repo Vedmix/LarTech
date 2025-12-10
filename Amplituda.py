@@ -1,46 +1,74 @@
 import serial
 import time
+import matplotlib.pyplot as plt
 
-PORT = 'COM5'
-BAUDRATE = 9600
-MONITOR = serial.Serial(PORT, BAUDRATE, timeout=2)
+ser = serial.Serial('COM5', 115200, timeout=1)
+ser.reset_input_buffer()
 
-def voltGroupReader(groupNum, MONITOR, volCount):
-    MONITOR.dtr = True
-    time.sleep(0.1)
-    MONITOR.dtr = False
-    time.sleep(3)
-    MONITOR.reset_input_buffer()
+plt.ion()
+fig, ax = plt.subplots(figsize=(12, 6))
 
-    while MONITOR.in_waiting == 0:
-        time.sleep(0.001)
-    first_line = MONITOR.readline()
+times, voltages = [], []
+line, = ax.plot(times, voltages, 'bo-', markersize=5, linewidth=1, alpha=0.7)
 
-    voltage_groups = []
-    group_times = []
+# ФИКСИРОВАННЫЙ МАСШТАБ
+ax.set_xlim(0, 40)
+ax.set_xticks(range(0, 41, 1))
 
-    for i in range(groupNum):
-        startTime = time.perf_counter()
-        voltageList = []
-        collected = 0
+# Диапазон и метки должны соответствовать
+ax.set_ylim(3.285, 3.305)
+ax.set_yticks([3.285, 3.290, 3.295, 3.300, 3.305])
 
-        while collected < volCount:
-                line = MONITOR.readline().decode('ascii', errors='ignore').strip()
-                volStr = line[(line.find('V:') + 2):].split()[0]
-                volFlt = float(volStr)
-                voltageList.append(volFlt)
-                collected += 1
+ax.grid(True)
 
-        endTime = time.perf_counter()
-        deltaTime = endTime - startTime
-        freq = volCount / deltaTime
+measurement_count = 0
 
-        voltage_groups.append(voltageList)
-        group_times.append(freq)
+try:
+    while True:
+        data = ser.readline().decode('ascii', errors='ignore').strip()
+        if data and ',' in data:
+            volt_str = data.split(',')[1]
+            voltage = float(volt_str) / 1000.0
+            measurement_count += 1
+            freq = measurement_count % 41
 
-    MONITOR.close()
-    return voltage_groups, group_times
+            if freq == 0:
+                times.clear()
+                voltages.clear()
 
-voltage_groups, frequencies = voltGroupReader(10, MONITOR,10)
+            times.append(freq)
+            voltages.append(voltage)
 
-print("Частоты групп:", frequencies)
+            line.set_data(times, voltages)
+
+            plt.pause(0.001)
+
+except KeyboardInterrupt:
+    pass
+
+finally:
+    ser.close()
+    plt.ioff()
+    plt.show()
+
+
+ser = serial.Serial('COM5', 115200, timeout=1)
+time.sleep(2)
+
+ser.reset_input_buffer()
+print("Буфер очищен, начинаем измерения...")
+
+start_time = time.time()
+
+try:
+    while True:
+        line = ser.readline().decode('ascii', errors='ignore').strip()
+        if line and ',' in line:
+            current_time = time.time()
+            elapsed = current_time - start_time
+
+            adc_str, volt_str = line.split(',')
+            print(f"{elapsed:7.3f} сек: ADC={adc_str}, V={int(volt_str) / 1000:.3f}V")
+
+except KeyboardInterrupt:
+    ser.close()
