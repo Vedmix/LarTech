@@ -8,6 +8,8 @@ def collect_packet(ser, packet_size=100):
     packet_data = []
     data_count = 0
 
+    print("")
+    print("")
     print(f"Сбор пакета из {packet_size} измерений...")
 
     ser.reset_input_buffer()
@@ -24,7 +26,6 @@ def collect_packet(ser, packet_size=100):
 
                 adc_str, volt_str = line.split(',')
 
-                # Упрощенная обработка
                 adc_str = ''.join(filter(str.isdigit, adc_str))
                 volt_str = ''.join(filter(str.isdigit, volt_str))
 
@@ -33,6 +34,9 @@ def collect_packet(ser, packet_size=100):
                         adc_value = int(adc_str)
                         millivolts = int(volt_str)
                         voltage = millivolts / 1000.0#Разобраться
+
+                        if voltage < 0.1000:
+                            voltage =0
 
                         packet_data.append({
                             'No.': data_count + 1,
@@ -57,6 +61,19 @@ def collect_packet(ser, packet_size=100):
     print(f"Пакет собран!")
     return packet_data, total_packet_time
 
+def signal_counter(packet_data):
+    signal_count = 0
+    count = 0
+    voltages = [d['voltage'] for d in packet_data]
+    for voltage in voltages:
+        if voltage == 0 and count > 0:
+            count = 0
+            signal_count += 1
+        elif voltage != 0:
+            count += 1
+        else:
+            pass
+    return signal_count
 
 def plot_packet(packet_data, packet_number):
     """Создает график для пакета данных с двумя подграфиками"""
@@ -74,7 +91,7 @@ def plot_packet(packet_data, packet_number):
     elapsed_times = [d['time'] for d in packet_data]
 
     # График 1: Напряжение vs Номер измерения (как в старой версии)
-    ax1.plot(measurements, voltages, 'bo-', markersize=3, linewidth=1, alpha=0.7)
+    ax1.plot(measurements, voltages, 'o-', markersize=3, alpha=0.7)
     ax1.set_xlim(1, len(packet_data))
     ax1.set_ylim(0, 3.4)
     ax1.grid(True)
@@ -86,7 +103,7 @@ def plot_packet(packet_data, packet_number):
     ax1.yaxis.set_major_locator(plt.MultipleLocator(0.1))
 
     # График 2: Напряжение vs Время (как в старой версии)
-    ax2.plot(elapsed_times, voltages, 'ro-', markersize=3, linewidth=1, alpha=0.7)
+    ax2.plot(elapsed_times, voltages, 'o-', markersize=3, alpha=0.7)
     ax2.set_ylim(0, 3.4)
     ax2.grid(True)
     ax2.set_xlabel('Время (секунды)')
@@ -117,9 +134,6 @@ def main():
                 all_packets.append(packet_data)
 
                 voltages = [d['voltage'] for d in packet_data]
-                times = [d['time'] for d in packet_data]
-
-                frequency = len(packet_data) / packet_time if packet_time > 0 else 0
 
                 avg_voltage = np.mean(voltages)
                 min_voltage = np.min(voltages)
@@ -128,15 +142,10 @@ def main():
                 print()
                 print(f"Количество измерений: {len(packet_data)}")
                 print(f"Общее время сбора: {packet_time:.3f} сек")
-                print(f"Среднее напряжение: {avg_voltage:.3f} В")
-                print(f"Мин. напряжение: {min_voltage:.3f} В")
                 print(f"Макс. напряжение: {max_voltage:.3f} В")
-                print(f"Частота измерений: {frequency:.1f} Гц")
-
-                # Отображаем график
+                print("Количество сигналов в пакете",signal_counter(packet_data))
                 plot_packet(packet_data, packet_num)
 
-                # Пауза между пакетами
                 if packet_num < 3:
                     pause_time = 1
                     time.sleep(pause_time)
