@@ -124,7 +124,7 @@ def showVolts():
 def main():
     global ser, program_running
 
-    ser = serial.Serial('COM5', 115200, timeout=1)
+    ser = serial.Serial('COM4', 115200, timeout=1)
     time.sleep(2)
     ser.reset_input_buffer()
 
